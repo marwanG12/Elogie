@@ -1,0 +1,70 @@
+# Paramètres réglables du POC (CLAUDE.md §12 : rien en dur dans le code).
+
+chemins:
+  corpus: data/corpus
+  reference: data/reference/reference.csv   # export interne numéro → nom, adresse
+  verite_terrain: data/ground_truth.csv
+  sortie: data/output
+
+numero_locataire:
+  # Nom de fichier : « <numero>_... » (chiffres avant le 1er underscore), ex. 1234_xxx.pdf
+  # Dans l'entrepôt Elogie, le numéro tient sur 11 caractères, complété par des zéros à gauche :
+  # 1234 → 00000001234. Format à appliquer pour la jointure avec data/reference.
+  longueur_entrepot: 11
+  caractere_remplissage: "0"
+
+ollama:
+  url: http://localhost:11434               # local uniquement (RGPD §4)
+  modele: qwen2.5:7b-instruct                # alternative : llama3.1:8b
+  temperature: 0
+  timeout_secondes: 300
+  num_ctx: 8192            # taille de contexte (prompt + document) ; 2048 par défaut tronquerait
+  nb_essais: 3             # réessais si la réponse n'est pas un JSON valide
+  keep_alive: 10m          # garde le modèle en mémoire entre deux documents (évite de le recharger)
+
+extraction:
+  max_caracteres_texte: 12000   # texte envoyé au modèle (au-delà : tronqué, signalé dans le journal)
+  langue_dates: fr
+  # Anti-hallucination : une valeur dite « trouvée » doit se retrouver dans le texte du document
+  # (comparaison floue, 0-100). Sinon → statut « ambigu ».
+  seuil_presence_dans_texte: 90
+  # Mention de garantie (formulations de config/mentions.yaml), comparaison floue 0-100 pour tolérer l'OCR :
+  mention:
+    seuil_presente: 90          # >= → presente
+    seuil_indeterminee: 80      # entre les deux → indeterminee ; en dessous → absente
+
+ocr:
+  langue: fra
+  tesseract_cmd: null     # chemin de tesseract.exe si absent du PATH
+  dpi: 300
+  # Si l'extraction directe renvoie moins de N caractères utiles par page → bascule OCR
+  min_caracteres_par_page: 50
+
+exploitabilite:
+  # Part minimale de « vrais mots » dans le texte pour le juger exploitable (anti-charabia)
+  ratio_mots_valides_min: 0.5
+  min_caracteres_total: 100
+  # Confiance OCR moyenne minimale (0-100, Tesseract) pour un document lu (au moins en partie) par OCR.
+  # Critère distinct du score de mots : un scan peut produire des mots plausibles mais faux.
+  # Sous ce seuil → non_exploitable → douteux (prudence : mieux vaut un faux négatif qu'un faux positif).
+  # Valeur de départ 55, À AJUSTER avec la vérité terrain (comparer confiance OCR et justesse des champs).
+  confiance_ocr_min: 55
+
+correspondance:
+  # Seuils rapidfuzz (0-100), réglés de façon exigeante (arbitrage §6 : pas de faux positif)
+  nom:
+    seuil_net: 90        # >= → correspondance nette
+    seuil_douteux: 70    # entre douteux et net → douteux ; en dessous → contradiction
+  adresse:
+    seuil_net: 85
+    seuil_douteux: 65
+  declaratif:
+    seuil_net: 90        # assureur, n° de police
+    seuil_douteux: 70
+    ecart_dates_jours_douteux: 0     # tout écart de date → au moins douteux
+    ecart_dates_jours_non_conforme: 31
+
+validite:
+  # PAV-3 : par défaut, l'attestation doit couvrir le jour du contrôle.
+  # null = date du jour ; sinon une date ISO AAAA-MM-JJ fixe (utile pour rejouer le corpus).
+  date_reference: null

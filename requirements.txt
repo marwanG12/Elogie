@@ -1,0 +1,10 @@
+pdfplumber
+PyMuPDF
+pytesseract
+pdf2image
+dateparser
+rapidfuzz
+pyyaml
+requests
+pandas
+pytest

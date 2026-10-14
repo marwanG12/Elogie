@@ -1,0 +1,28 @@
+# --- Données réelles : JAMAIS versionnées (RGPD, cf. CLAUDE.md §4 et §12) ---
+data/corpus/*
+!data/corpus/.gitkeep
+data/reference/*
+!data/reference/.gitkeep
+data/ground_truth.csv
+
+# Sorties du pipeline (peuvent contenir des valeurs extraites)
+data/output/*
+!data/output/.gitkeep
+
+# --- Python ---
+venv/
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# --- Divers ---
+.vscode/
+.idea/
+*.log
+
+# --- Filet de sécurité : aucun document ni export réel, où qu'il soit déposé ---
+*.pdf
+data/**/*.csv
+data/**/*.json
+data/**/*.xlsx

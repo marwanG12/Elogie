@@ -1,0 +1,13 @@
+# Famille de formulations acceptées comme « mention de garantie » (CLAUDE.md §6 A.5 et §8).
+# PAV-1 : le métier a demandé « assurance habitation » ; le réel montre une famille plus large.
+# Valeur par défaut : on accepte la famille complète. ⚠️ À revalider avec le métier.
+# La comparaison est faite après normalisation (minuscules, sans accents, espaces réduits).
+
+formulations_garantie:
+  - assurance habitation
+  - multirisque habitation
+  - responsabilité locative
+  - responsabilité civile locative
+  - responsabilité civile de locataire
+  - risques locatifs
+  - garantie des risques locatifs
