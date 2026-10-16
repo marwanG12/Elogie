@@ -4,7 +4,15 @@ chemins:
   corpus: data/corpus
   reference: data/reference/reference.csv   # export interne numéro → nom, adresse
   verite_terrain: data/ground_truth.csv
+  # Déclaratif extranet (bloc B) : CSV sans en-tête, 1 ligne par PDF déposé (motif glob)
+  declaratif: data/corpus/AttestationAssurances*.csv
   sortie: data/output
+
+reference:
+  # Export entrepôt [BDDH].[US_ENT].[TH_LOCATAIRE] (data/reference/extraction_reference.sql) :
+  # une ligne par occupant et par lot ; seuls les occupants du lot du dépôt, non sortis, sont retenus.
+  separateur: ";"
+  valeur_nulle: "NULL"
 
 numero_locataire:
   # Nom de fichier : « <numero>_... » (chiffres avant le 1er underscore), ex. 1234_xxx.pdf
@@ -53,18 +61,41 @@ exploitabilite:
 correspondance:
   # Seuils rapidfuzz (0-100), réglés de façon exigeante (arbitrage §6 : pas de faux positif)
   nom:
-    seuil_net: 90        # >= → correspondance nette
+    seuil_net: 95        # >= → correspondance nette (95 : « DUPOND » ≠ « DUPONT » sur un nom court, score 91)
     seuil_douteux: 70    # entre douteux et net → douteux ; en dessous → contradiction
+    # Mots retirés avant comparaison (civilités, liaisons)
+    mots_ignores: [m, mr, mme, mlle, monsieur, madame, mademoiselle, et]
+    # Mots d'alliance (« Marie MARTIN épouse DUPONT », « Marie DUPONT née MARTIN ») : le nom est découpé
+    # en variantes (nom avant le mot, et nom avant le mot dont un mot est remplacé par la suite) ; la meilleure compte.
+    mots_alliance: [epouse, ep, nee, ne, veuve, vve, divorcee, epoux]
   adresse:
-    seuil_net: 85
+    seuil_net: 85        # score sur le nom de voie + ville ; numéro de rue et code postal : égalité stricte
     seuil_douteux: 65
+    # Abréviations développées avant comparaison
+    abreviations: {bd: boulevard, bld: boulevard, av: avenue, ave: avenue, r: rue, pl: place,
+                   imp: impasse, all: allee, sq: square, fg: faubourg, fbg: faubourg, pas: passage,
+                   qu: quai, rte: route, ch: chemin, st: saint, ste: sainte}
+    # Compléments d'adresse retirés avec le mot qui suit (bât. B, esc. 2, appt 34…)
+    complements: [bat, batiment, esc, escalier, appt, apt, appartement, etage, eta, porte, bal, lot, logement, residence]
   declaratif:
-    seuil_net: 90        # assureur, n° de police
-    seuil_douteux: 70
+    seuil_net: 90        # assureur (après table d'alias config/assureurs.yaml)
+    # N° de police : égalité après normalisation, ou l'un contenu dans l'autre (préfixes saisis par le locataire)
+    police_longueur_min_inclusion: 6
     ecart_dates_jours_douteux: 0     # tout écart de date → au moins douteux
+    # Au-delà : non_conforme, pour la date de FIN seulement. La date de début saisie est souvent
+    # la date du dépôt ou de souscription d'origine (observé sur le corpus du 14/10) → plafonnée à douteux.
     ecart_dates_jours_non_conforme: 31
 
 validite:
-  # PAV-3 : par défaut, l'attestation doit couvrir le jour du contrôle.
-  # null = date du jour ; sinon une date ISO AAAA-MM-JJ fixe (utile pour rejouer le corpus).
-  date_reference: null
+  # PAV-3 : date à laquelle l'attestation doit être valable.
+  #   depot = date de dépôt lue dans le nom de fichier (rejouable à l'identique ; défaut retenu)
+  #   jour  = date du traitement ;  ou une date ISO AAAA-MM-JJ fixe.
+  date_reference: depot
+  # Verdicts des cas limites (valeurs par défaut, à revalider avec le métier) :
+  date_fin_absente: douteux        # validité non prouvable, sans être une absence avérée
+  date_debut_future: douteux       # attestation de l'année suivante déposée en avance
+
+mention:
+  # Mention non trouvée sur un document lu (au moins en partie) par OCR : l'OCR a pu manquer la ligne
+  absente_si_ocr: douteux
+  absente_si_texte: non_conforme

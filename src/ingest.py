@@ -5,9 +5,11 @@
   elle est rasterisée (PyMuPDF, sans Poppler) puis passée à l'OCR (pytesseract, fra).
   La décision est prise PAR PAGE : un même PDF peut mêler une page texte et une page scannée.
 """
+import csv
 import io
 import logging
 import re
+from datetime import date, datetime
 from pathlib import Path
 
 import pymupdf
@@ -17,6 +19,10 @@ from PIL import Image
 journal = logging.getLogger(__name__)
 
 MOTIF_NUMERO = re.compile(r"^(\d+)_")
+# 3e segment du nom de fichier = date/heure de dépôt JJ-MM-AA-hh-mm-ss
+MOTIF_DATE_DEPOT = re.compile(r"^[^_]+_[^_]+_(\d{2})-(\d{2})-(\d{2})-\d{2}-\d{2}-\d{2}_")
+# Colonnes du CSV déclaratif (sans en-tête), dans l'ordre
+COLONNES_DECLARATIF = ("code", "numero_fichier", "assureur", "police", "date_debut", "date_fin", "fichier")
 
 
 def extraire_numero_locataire(chemin_pdf: Path, parametres: dict) -> dict:
@@ -34,6 +40,79 @@ def extraire_numero_locataire(chemin_pdf: Path, parametres: dict) -> dict:
     numero_entrepot = numero_fichier.rjust(config_numero["longueur_entrepot"],
                                            config_numero["caractere_remplissage"])
     return {"numero_fichier": numero_fichier, "numero_entrepot": numero_entrepot}
+
+
+def extraire_date_depot(nom_fichier: str) -> date | None:
+    """Date de dépôt lue dans le nom de fichier « <numero>_<code>_<JJ-MM-AA-hh-mm-ss>_<index>.pdf ».
+    Ex. « 18314_01-06-4013-2-47_14-10-26-12-12-46_8.pdf » → 2026-10-14. None si le nom ne suit pas ce format."""
+    correspondance = MOTIF_DATE_DEPOT.match(Path(nom_fichier).name)
+    if not correspondance:
+        return None
+    jour, mois, annee = (int(g) for g in correspondance.groups())
+    try:
+        return date(2000 + annee, mois, jour)
+    except ValueError:
+        return None
+
+
+def _date_saisie(texte: str) -> date | None:
+    """Date saisie sur l'extranet (JJ/MM/AAAA) ; None si vide ou invalide."""
+    try:
+        return datetime.strptime(texte.strip(), "%d/%m/%Y").date()
+    except ValueError:
+        return None
+
+
+def charger_declaratif(motif_chemin: str, racine: Path) -> dict:
+    """Charge le(s) CSV déclaratif(s) de l'extranet (bloc B) : sans en-tête, séparateur « ; », 7 colonnes.
+    Renvoie {nom du fichier PDF: {"code", "numero_fichier", "assureur", "police", "date_debut", "date_fin", "fichier"}},
+    dates converties en date (None si invalides). Les lignes mal formées sont ignorées (journalisées)."""
+    declaratif = {}
+    for chemin in sorted(Path(racine).glob(motif_chemin)):
+        with open(chemin, encoding="utf-8-sig", newline="") as fichier:
+            for numero_ligne, ligne in enumerate(csv.reader(fichier, delimiter=";"), start=1):
+                if len(ligne) != len(COLONNES_DECLARATIF):
+                    journal.warning("Déclaratif %s ligne %d ignorée (%d colonnes)", chemin.name, numero_ligne, len(ligne))
+                    continue
+                saisie = {nom: valeur.strip() for nom, valeur in zip(COLONNES_DECLARATIF, ligne)}
+                saisie["date_debut"] = _date_saisie(saisie["date_debut"])
+                saisie["date_fin"] = _date_saisie(saisie["date_fin"])
+                declaratif[saisie["fichier"]] = saisie
+    journal.info("Déclaratif : %d ligne(s) chargée(s)", len(declaratif))
+    return declaratif
+
+
+def _adresse_logement(ligne: dict) -> str:
+    """Adresse du logement depuis TH_LOCATAIRE : LIB_RUE porte le complément collé en suffixe
+    (« 12 RUE X-ESC 4 ETA 02 » avec COMPL_RUE = « ESC 4 ETA 02 ») → on le retire, puis CP + commune."""
+    rue, complement = ligne["LIB_RUE"], ligne["COMPL_RUE"]
+    if complement and rue.endswith(complement):
+        rue = rue[:-len(complement)].rstrip(" -")
+    return " ".join(morceau for morceau in (rue, ligne["COD_POSTAL"], ligne["LIB_COM"]) if morceau)
+
+
+def charger_reference(chemin: Path, parametres: dict) -> dict:
+    """Charge l'export de référence de l'entrepôt (TH_LOCATAIRE, une ligne par occupant et par lot).
+    Ne garde que les occupants non sortis, regroupés par (n° de compte sur 11 car., ID_LOT) : la clé
+    inclut le lot pour écarter les autres lots du locataire (parking, cave) et les anciens baux.
+    Renvoie {(ccompte, id_lot): {"titulaires": ["PRENOM NOM", ...], "adresse": str}} ; {} si le fichier manque."""
+    chemin = Path(chemin)
+    if not chemin.exists():
+        journal.warning("Référence absente (%s) : nom et adresse non vérifiables", chemin.name)
+        return {}
+    config = parametres["reference"]
+    reference = {}
+    with open(chemin, encoding="utf-8-sig", newline="") as fichier:
+        for brute in csv.DictReader(fichier, delimiter=config["separateur"]):
+            ligne = {cle: ("" if (valeur or "").strip() == config["valeur_nulle"] else (valeur or "").strip())
+                     for cle, valeur in brute.items()}
+            if ligne["D_SOR_QUIT"]:
+                continue
+            entree = reference.setdefault((ligne["CCOMPTE"], ligne["ID_LOT"]),
+                                          {"titulaires": [], "adresse": _adresse_logement(ligne)})
+            entree["titulaires"].append(f"{ligne['PRENOM']} {ligne['NOM']}".strip())
+    journal.info("Référence : %d logement(s) chargé(s)", len(reference))
+    return reference
 
 
 def compter_caracteres_utiles(texte: str) -> int:

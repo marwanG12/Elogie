@@ -1,0 +1,33 @@
+# Table d'alias des assureurs (règle B : assureur déclaré ↔ assureur de l'attestation).
+# Les locataires déclarent souvent leur BANQUE ou leur COURTIER au lieu de l'assureur réel.
+# Chaque groupe = un assureur ; ses alias sont reconnus comme mots entiers après normalisation
+# (minuscules, sans accents ni ponctuation). ⚠️ Rattachements à revalider avec le métier.
+
+groupes:
+  la_banque_postale: [la banque postale, banque postale, lbp, la banque postale assurances iard]
+  acm: [credit mutuel, cic, cic assurances, acm, acm iard, assurances du credit mutuel]
+  pacifica: [pacifica, lcl, credit agricole, credit agricole assurances]
+  cardif: [cardif, cardif iard, bnp paribas, bnp paribas cardif]
+  sogessur: [sogessur, societe generale, societe generale assurances]
+  axa: [axa, axa france, direct assurance, avanssur]
+  abeille: [abeille, abeille assurances, aviva]
+  macif: [macif]
+  maif: [maif]
+  maaf: [maaf]
+  matmut: [matmut]
+  gmf: [gmf]
+  smacl: [smacl]
+  mma: [mma]
+  allianz: [allianz]
+  groupama: [groupama]
+  generali: [generali]
+  vyv: [vyv, vyv assurance, vyv assurances]
+
+# Déclarations qui ne désignent pas un assureur identifiable → comparaison impossible, sans effet
+non_comparables:
+  - autres assurances
+  - autre
+  # Courtiers : l'assureur porteur du risque n'est pas connu à partir du nom
+  - abg assurances
+  - assu 2000
+  - acommeassure

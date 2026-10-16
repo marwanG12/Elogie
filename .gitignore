@@ -26,3 +26,6 @@ __pycache__/
 data/**/*.csv
 data/**/*.json
 data/**/*.xlsx
+
+# Fichiers verrous Office
+~$*
